@@ -8,16 +8,29 @@ def flatten_dict(d, parent_key='', sep='_'):
     Nested keys are joined by the separator (e.g., client_address_city).
     """
     items = []
+    circuits = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep=sep).items())
+            dict_flatten, dict_circs = flatten_dict(v, new_key, sep=sep)
+            items.extend(dict_flatten.items())
+
+            if len(dict_circs)>0:
+                circuits.append(dict_circs)
+
         elif isinstance(v, list):
-            for val in v:
-                items.extend(flatten_dict(val, new_key, sep=sep).items())
+            if k == 'circuits':
+                circuits.extend(v)
+            else:    
+                for val in v:
+                    list_flatten, list_circs = flatten_dict(val, new_key, sep=sep)
+                    items.extend(list_flatten.items())
+
+                    if len(list_circs) > 0:
+                        circuits.append(list_circs)
         else:
             items.append((new_key, v))
-    return dict(items)
+    return (dict(items),circuits)
 
 def process_avro_to_csv(avro_path, csv_path):
     all_flattened_rows = []
@@ -27,16 +40,13 @@ def process_avro_to_csv(avro_path, csv_path):
             for record in reader:
 
                 record = record['data']
-                flat_record = flatten_dict(record)
+                flat_record,curcs = flatten_dict(record)
                 
-                if 'distributionBoards' in record:
-                    for db in record['distributionBoards']:
-                        db_flat = flatten_dict(db, parent_key='db')
-                        combined = {**flat_record, **db_flat}
-                        combined.pop('distributionBoards', None)
-                        all_flattened_rows.append(combined)
-                else:
-                    all_flattened_rows.append(flat_record)
+                for circ in curcs[0][0]:
+                    flat_circ_rec,_ = flatten_dict(circ, parent_key='')
+                    circ_record = flat_circ_rec | flat_record 
+                    print("\n\n\naaaaa",circ_record)
+                    all_flattened_rows.append(circ_record)
         
 
     if not all_flattened_rows:
@@ -46,7 +56,7 @@ def process_avro_to_csv(avro_path, csv_path):
     # Identify all unique keys for CSV headers
     keys = set().union(*(d.keys() for d in all_flattened_rows))
     # Filter out list objects that weren't expanded to keep CSV clean
-    fieldnames = sorted([k for k in keys if not isinstance(all_flattened_rows[0].get(k), list)])
+    fieldnames = [k for k in keys if not isinstance(all_flattened_rows[0].get(k), list)]
 
     # Write to CSV
     with open(csv_path, 'w', newline='', encoding='utf-8') as output_file:
