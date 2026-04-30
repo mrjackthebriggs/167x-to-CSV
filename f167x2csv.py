@@ -5,6 +5,8 @@ import avro.datafile
 import avro.io
 import os
 import re
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 def flatten_dict(d, parent_key='', sep='_'):
     """
@@ -64,7 +66,6 @@ def process_avro_to_csv(avro_path, csv_path):
                 for circ in curcs[0][0]:
                     flat_circ_rec,_ = flatten_dict(circ, parent_key='')
                     circ_record = flat_circ_rec | flat_record 
-                    # print("\n\n\naaaaa",circ_record)
                     all_flattened_rows.append(circ_record)
         
 
@@ -74,6 +75,15 @@ def process_avro_to_csv(avro_path, csv_path):
 
     # Identify all unique keys for CSV headers
     keys = set().union(*(d.keys() for d in all_flattened_rows))
+
+    # convert all timestamps to dates
+    for i,d in enumerate(all_flattened_rows):
+        for k,v in d.items():
+            ts = re.search('(T|t)imestamp',k)
+            if ts:
+                if v > 0:
+                    dt = datetime.fromtimestamp(v/1000, tz=timezone.utc) # format is in ms
+                    all_flattened_rows[i][k] = dt.strftime("%I:%M%p - %d/%m/%y")  
 
     # remove all keys that never have a value
     remove_keys = []
