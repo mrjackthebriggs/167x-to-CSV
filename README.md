@@ -1,0 +1,2 @@
+Python code that converts a F167x(avro) database file to a a flattened csv.
+This is to convert the file output for a Fluke F1677 Electrical meter to a useable format insead of using trutest subscription model. 
